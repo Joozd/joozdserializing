@@ -19,7 +19,7 @@
 
 @file:Suppress("unused")
 
-package nl.joozd.joozdlogcommon.serializing
+package nl.joozd.serializing
 
 import kotlin.reflect.KClass
 
@@ -236,7 +236,7 @@ fun pairIntLongFromBytes(bytes: ByteArray): Pair<Int, Long> {
 }
 
 /**
- * Does not suport a list of Lists as the inner list type cannot be reflected (be me right now)
+ * Does not suport a list of Lists as the inner list type cannot be reflected (by me right now)
  */
 
 inline fun <reified T> List<T>.toByteArray(): ByteArray {
@@ -262,8 +262,7 @@ inline fun <reified T> List<T>.toByteArray(): ByteArray {
     }
 }
 
-inline fun <reified T> listFromBytes(bytes: ByteArray): List<T> {
-    return when (T::class) {
+inline fun <reified T> listFromBytes(bytes: ByteArray): List<T> = when (T::class) {
         String::class -> unpackList(bytes).map{it.toString(Charsets.UTF_8) as T}
         Long::class -> unpackList(bytes).map{ longFromBytes(it) as T}
         Int::class -> unpackList(bytes).map{ intFromBytes(it) as T}
@@ -275,7 +274,7 @@ inline fun <reified T> listFromBytes(bytes: ByteArray): List<T> {
         ByteArray::class -> unpackList(bytes).map{it as T}
         else -> error("not supported")
     }
-}
+
 
 /**
  * Takes a map and serializes it into a Bytearray
@@ -368,7 +367,7 @@ fun wrap(byteArray: ByteArray): ByteArray {
 inline fun <reified T>wrap(list: List<T>): ByteArray{
     val bytes = wrap(list.toByteArray())
     val bytesNeeded = bytesNeeded(bytes.size)
-    return (listOf(LIST + bytesNeeded.toByte()).toByteArray()
+    return (listOf((LIST + bytesNeeded).toByte()).toByteArray()
             + bytes.size.toByteArray().takeLast(bytesNeeded)
             + bytes)
 }
@@ -470,7 +469,7 @@ inline fun <reified T>unwrapList(bytes:ByteArray): List<T>{
     val size = getWrappedListLength(bytes)
     val bytesNeeded = bytes[0] - LIST_BASIC_VALUE
     require(bytes.size == size) { "unwrapList(): ByteArray length doesn't match declared length - ${bytes.size} != ${1 + bytesNeeded + size}" } //  descriptor+lengthBytes+String
-    return listFromBytes(bytes.drop(1 + bytesNeeded).toByteArray())
+    return listFromBytes(unwrap(bytes.drop(1 + bytesNeeded).toByteArray()))
 }
 
 inline fun <reified K, reified V>unwrapMap(bytes:ByteArray): Map<K, V>{
@@ -532,7 +531,7 @@ fun checkType(bytes: ByteArray): Byte {
             type
         }
         in (MAP..MAP+4) -> {
-            require(bytes.size > 5) { "checkType(): Type says MAP but not enough Bytes for that" } // Needs a descriptor and a size byte (can be empty string)
+            require(bytes.size > 5) { "checkType(): Type says MAP but not enough Bytes for that" } // Needs a descriptor and a size byte (can be empty map)
             MAP
         }
         in (STRING..STRING+4) -> {
@@ -540,7 +539,7 @@ fun checkType(bytes: ByteArray): Byte {
             STRING
         }
         in (LIST..LIST+4) -> {
-            require(bytes.size > 1) { "checkType(): Type says LIST but not enough Bytes for that" } // Needs a descriptor and a size byte (can be empty string)
+            require(bytes.size > 1) { "checkType(): Type says LIST but not enough Bytes for that" } // Needs a descriptor and a size byte (can be empty list)
             LIST
         }
         in (BYTEARRAY..BYTEARRAY + 4) -> {
@@ -571,28 +570,38 @@ fun nextType(bytes: ByteArray): Byte = when {
 /**
  * Will return the first wrapped value (including wrap) from a stream of Bytes
  * @param bytes: A stream of bytes, starting with a wrapped value
+ * @param offset: First byte to consider
+ *      (will ignore all earlier bytes, to prevent lots of memory operations while iterating)
  * @return the wrapped value as ByteArray
  */
-fun nextWrap(bytes: ByteArray): ByteArray {
-    return when (bytes[0]) {
-        LONG -> bytes.slice(0 until SIZE_WRAPPED_LONG).toByteArray()
-        INT -> bytes.slice(0 until SIZE_WRAPPED_INT).toByteArray()
-        SHORT -> bytes.slice(0 until SIZE_WRAPPED_SHORT).toByteArray()
-        CHAR -> bytes.slice(0 until SIZE_WRAPPED_CHAR).toByteArray()
-        FLOAT -> bytes.slice(0 until SIZE_WRAPPED_FLOAT).toByteArray()
-        DOUBLE -> bytes.slice(0 until SIZE_WRAPPED_DOUBLE).toByteArray()
-        BOOLEAN -> bytes.slice(0 until SIZE_WRAPPED_BOOLEAN).toByteArray()
+fun nextWrap(bytes: ByteArray, offset: Int = 0): ByteArray {
+    return when (bytes[offset]) {
+        LONG -> bytes.slice(offset until offset + SIZE_WRAPPED_LONG).toByteArray()
+        INT -> bytes.slice(offset until offset + SIZE_WRAPPED_INT).toByteArray()
+        SHORT -> bytes.slice(offset until offset + SIZE_WRAPPED_SHORT).toByteArray()
+        CHAR -> bytes.slice(offset until offset + SIZE_WRAPPED_CHAR).toByteArray()
+        FLOAT -> bytes.slice(offset until offset + SIZE_WRAPPED_FLOAT).toByteArray()
+        DOUBLE -> bytes.slice(offset until offset + SIZE_WRAPPED_DOUBLE).toByteArray()
+        BOOLEAN -> bytes.slice(offset until offset + SIZE_WRAPPED_BOOLEAN).toByteArray()
         in (BYTEARRAY..(BYTEARRAY + 4)) -> bytes.slice(
-            0 until getWrappedByteArrayLength(
-                bytes
+            offset until offset + getWrappedByteArrayLength(
+                bytes.slice(offset..minOf (offset + 4, bytes.size - 1))
             )
         ).toByteArray()
+
+        in (LIST..(LIST + 4)) -> bytes.slice(
+            offset until offset + getWrappedListLength(
+                bytes.slice(offset..minOf (offset + 4, bytes.size - 1))
+            )
+        ).toByteArray()
+
         in (STRING..Int.MAX_VALUE) -> bytes.slice(
-            0 until getWrappedStringLength(
-                bytes
+            offset until offset + getWrappedStringLength(
+                bytes.slice(offset..minOf (offset + 4, bytes.size - 1))
             )
         ).toByteArray()
-        else -> error("nextWrap(): WIERD ERROR should have failed earlier - type is ${bytes[0]}")
+
+        else -> error("nextWrap(): WIERD ERROR should have failed earlier - type is ${bytes[offset]}")
     }
 }
 
@@ -647,7 +656,7 @@ private fun getWrappedStringLength(bytes: List<Byte>): Int {
 }
 
 private fun getWrappedByteArrayLength(bytes: ByteArray): Int {
-    require(checkType(bytes) == BYTEARRAY)
+    require(checkType(bytes) == BYTEARRAY) { "unwrapByteArray(): Descriptor Byte doesn't say BYTEARRAY($BYTEARRAY): ${bytes[0]}" }
     val bytesNeeded = bytes[0] - BYTEARRAY_BASIC_VAL
     return intFromBytes(
         ByteArray(4 - bytesNeeded) + bytes.slice(
@@ -676,7 +685,7 @@ fun getWrappedListLength(bytes: ByteArray): Int {
 }
 
 fun getWrappedListLength(bytes: List<Byte>): Int {
-    require(checkType(bytes) == BYTEARRAY)
+    require(checkType(bytes) == LIST)
     val bytesNeeded = bytes[0] - LIST_BASIC_VALUE
     return intFromBytes(
         ByteArray(4 - bytesNeeded) + bytes.slice(
@@ -724,7 +733,6 @@ fun bytesNeeded(value: Int) = when (value) {
 /**
  * Helper function for packing Lists
  */
-
 fun packList(series: List<ByteArray>): ByteArray =
     series.map { it.size.toByteArray().toList() + it.toList() }.flatten().toByteArray()
 
@@ -741,13 +749,4 @@ fun unpackList(packed: ByteArray): List<ByteArray> {
     return list
 }
 
-fun serializedToWraps(bytes: ByteArray): List<ByteArray>{
-    val bb = bytes.toList().toMutableList()
-    val wraps = mutableListOf<ByteArray>()
-    while (bb.isNotEmpty()){
-        wraps.add(nextWrap(bb.toByteArray()))
-        repeat(wraps.last().size){ bb.removeAt(0)}
-    }
-    return wraps
-}
 

@@ -1,4 +1,4 @@
-package nl.joozd.joozdlogcommon.serializing
+package nl.joozd.serializing
 
 /**
  * Takes a list of ByteArrays and returns it as a single ByteArray
