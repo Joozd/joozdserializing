@@ -547,7 +547,7 @@ fun checkType(bytes: ByteArray): Byte {
             //require (checkWrapLength(bytes))                   { "checkType(): Descriptor says ${checkWrapLength(bytes)} bytes but actual size is ${bytes.size}"}
             BYTEARRAY
         }
-        else -> error("invalid descriptor Byte: $type")
+        else -> error("invalid descriptor Byte: $type / bytes = ${bytes.take(40)}")
     }
 }
 
