@@ -20,3 +20,6 @@ fun unpackSerialized(packed: ByteArray): List<ByteArray>{
     }
     return list
 }
+
+fun <T: JoozdSerializable> unpackSerialized(packed: ByteArray, deserializer: (ByteArray) -> T): List<T> =
+    unpackSerialized(packed).map { deserializer(it) }
