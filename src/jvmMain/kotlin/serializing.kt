@@ -182,7 +182,7 @@ fun shortFromBytes(bytes: ByteArray): Short {
 }
 
 /**
- * Makes aByteArray from a Boolean (so an 1 or a 0)
+ * Makes a ByteArray from a Boolean (1 for true or 0 for false)
  */
 fun Boolean.toByteArray(): ByteArray {
     return if (this) listOf(1.toByte()).toByteArray() else listOf(0.toByte()).toByteArray()
@@ -216,7 +216,7 @@ fun <T, R> Pair<T, R>.toByteArray(): ByteArray {
     return first + second
 }
 
-//probably not gonna make this for every possibility
+//probably not going to make this for every possibility
 fun pairLongLongFromBytes(bytes: ByteArray): Pair<Long, Long> {
     require(bytes.size == Long.SIZE_BYTES + Long.SIZE_BYTES)
     return longFromBytes(
@@ -236,7 +236,7 @@ fun pairIntLongFromBytes(bytes: ByteArray): Pair<Int, Long> {
 }
 
 /**
- * Does not suport a list of Lists as the inner list type cannot be reflected (by me right now)
+ * Does not support a list of Lists as the inner list type cannot be reflected (by me right now)
  */
 
 inline fun <reified T> List<T>.toByteArray(): ByteArray {
@@ -280,11 +280,9 @@ inline fun <reified T> listFromBytes(bytes: ByteArray): List<T> = when (T::class
  * Takes a map and serializes it into a Bytearray
  * Structure:
  * listOf(
- * keys as List<K>.toByteArray()
- * values as List<V>.toByteArray()
- * ).toByteArray())
- *
- * Will throw error if list sizes don't match
+ *  keys as List<K>.toByteArray(),
+ *  values as List<V>.toByteArray()
+ * ).toByteArray()
  */
 inline fun <reified K, reified V> Map<K, V>.toByteArray(): ByteArray = (listOf(
     this.keys.toList().toByteArray(),
@@ -297,8 +295,6 @@ inline fun <reified K, reified V> mapFromBytes(bytes: ByteArray): Map<K,V>{
     val values = listFromBytes<V>(kvList[1])
     require (keys.size == values.size)
 
-    //return if (kvList[0].isEmpty()) emptyMap<K,V>()
-    //else
     return   keys.zip(values).toMap()
 }
 
@@ -323,8 +319,9 @@ inline fun <reified T> T.castedToByteArray(): ByteArray {
 
 /**
  * wrap gives a function to wrap primitive types into a bytearray
- * that can be unwrapped by it's respective unWrap function
- *  * Functions are provided to tag every value with a descriptor:
+ * that can be unwrapped by its respective unwrap function; the correct function can usually be found by [unwrap]
+ *
+ * Functions are provided to tag every value with a descriptor:
  * Format for non-string: <DescriptorByte><Appropriate amount of bytes for that data>
  * Format for string:
  *  - Descriptor Byte is STRING_BASIC_VALUE + Bytes needed to define length (usualy 1 or 2, unless its a HUGE string
@@ -338,8 +335,6 @@ inline fun <reified T> T.castedToByteArray(): ByteArray {
  *  - Next n bytes say how many bytes in the ByteArray (lets call that m)
  *  - next m Bytes are the ByteArray
  *  - example: "Hallon!".toBytearray() will be "9-6-H-a-l-l-o-n" (where letters are encoded UTF-8)
-
- *
  */
 fun wrap(string: String): ByteArray {
     // (listOf((STRING_BASIC_VALUE + bytesNeeded(string.length)).toByte()).toByteArray() + string.length.toByteArray()
@@ -362,7 +357,7 @@ fun wrap(byteArray: ByteArray): ByteArray {
 
 /**
  * Unwrapping list needs to be done specifically with
- * @link unwrapList() as Type cannot be determined with generic
+ * [unwrapList] as Type cannot be determined with generic
  */
 inline fun <reified T>wrap(list: List<T>): ByteArray{
     val bytes = wrap(list.toByteArray())
@@ -465,7 +460,7 @@ fun unwrapByteArray(bytes: ByteArray): ByteArray {
 }
 
 inline fun <reified T>unwrapList(bytes:ByteArray): List<T>{
-    require(checkType(bytes) == LIST) { "unwrapBoolean(): Descriptor Byte doesn't say LIST($LIST): ${bytes[0]}" }
+    require(checkType(bytes) == LIST) { "unwrapList(): Descriptor Byte doesn't say LIST($LIST): ${bytes[0]}" }
     val size = getWrappedListLength(bytes)
     val bytesNeeded = bytes[0] - LIST_BASIC_VALUE
     require(bytes.size == size) { "unwrapList(): ByteArray length doesn't match declared length - ${bytes.size} != ${1 + bytesNeeded + size}" } //  descriptor+lengthBytes+String
@@ -473,7 +468,7 @@ inline fun <reified T>unwrapList(bytes:ByteArray): List<T>{
 }
 
 inline fun <reified K, reified V>unwrapMap(bytes:ByteArray): Map<K, V>{
-    require(checkType(bytes) == MAP) { "unwrapBoolean(): Descriptor Byte doesn't say LIST($LIST): ${bytes[0]}" }
+    require(checkType(bytes) == MAP) { "unwrapMap(): Descriptor Byte doesn't say MAP($MAP): ${bytes[0]}" }
     val size = getWrappedListLength(bytes)
     val bytesNeeded = bytes[0] - MAP_BASIC_VALUE
     require(bytes.size == size) { "unwrapMap(): ByteArray length doesn't match declared length - ${bytes.size} != ${1 + bytesNeeded + size}" } //  descriptor+lengthBytes+String
